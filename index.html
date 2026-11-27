@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Prepara tests con tus propios bancos de preguntas.">
+  <title>Repaso · Tu mesa de estudio</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="data/banco-inicial.js"></script>
+  <script defer src="vendor/jszip.min.js"></script>
+  <script defer src="core.js"></script>
+  <script defer src="files.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <a href="#estudiar" class="brand" aria-label="Repaso, inicio"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Repaso</span></a>
+      <nav class="nav" aria-label="Secciones">
+        <a href="#estudiar" data-view="estudiar"><span class="nav-icon icon-study" aria-hidden="true"></span>Estudiar</a>
+        <a href="#bancos" data-view="bancos"><span class="nav-icon icon-banks" aria-hidden="true"></span>Bancos</a>
+        <a href="#historial" data-view="historial"><span class="nav-icon icon-history" aria-hidden="true"></span>Historial</a>
+      </nav>
+      <div class="sidebar-foot"><span class="status-dot"></span><span id="storage-status">Datos en este navegador</span></div>
+    </aside>
+
+    <main id="main" class="main">
+      <header class="topbar"><span id="breadcrumb">Estudiar</span><button class="button subtle small" id="quick-import" type="button">Importar banco</button></header>
+      <p id="notice" class="notice" role="status" hidden></p>
+
+      <section id="estudiar" class="view" aria-labelledby="study-heading">
+        <div class="hero">
+          <div class="hero-copy">
+            <h1 id="study-heading">Tu mesa<br>de estudio</h1>
+            <p>Elige qué practicar y corrige el test al terminar.</p>
+          </div>
+          <div class="hero-bank">
+            <div class="hero-art" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="hero-count" id="hero-count">0</div>
+            <div class="hero-label" id="hero-label">Preguntas en el banco</div>
+          </div>
+        </div>
+        <div class="dashboard">
+          <section class="card config" aria-labelledby="config-heading">
+            <h2 id="config-heading">Configurar sesión</h2>
+            <form id="setup">
+              <label for="bank-select">Banco de preguntas</label>
+              <select id="bank-select" required></select>
+              <fieldset class="mode-field">
+                <legend>Tipo de sesión</legend>
+                <div class="modes">
+                  <label><input type="radio" name="mode" value="random" checked><span>Aleatoria</span></label>
+                  <label><input type="radio" name="mode" value="selection"><span>Por número</span></label>
+                  <label><input type="radio" name="mode" value="review"><span>Fallos</span></label>
+                </div>
+              </fieldset>
+              <div class="field-row">
+                <div id="count-field"><label for="count">Preguntas</label><input type="number" id="count" min="1" step="1" value="20"></div>
+                <div id="range-field" hidden><label for="range">Números o rangos</label><input type="text" id="range" placeholder="1-15, 23, 40-45"></div>
+                <div><label for="penalty">Penalización por fallo</label><select id="penalty"><option value="0">Sin penalización</option><option value="0.25">−¼ de acierto</option><option value="0.3333333333333333">−⅓ de acierto</option><option value="0.5">−½ de acierto</option><option value="1">−1 acierto</option></select></div>
+              </div>
+              <div class="topic-field" id="topic-field" hidden><label for="topic">Tema</label><select id="topic"></select></div>
+              <p id="setup-error" class="error" role="alert" hidden></p>
+              <div class="form-actions"><button class="button primary" id="start" type="submit">Empezar test</button><button class="button subtle" id="resume" type="button" hidden>Continuar test</button></div>
+            </form>
+          </section>
+          <section class="card progress" aria-labelledby="progress-heading">
+            <h2 id="progress-heading">Tu progreso</h2>
+            <div class="stat-grid">
+              <div><strong id="stat-tests">0</strong><span>Tests</span></div>
+              <div><strong id="stat-rate">—</strong><span>Aciertos</span></div>
+              <div><strong id="stat-last">—</strong><span>Última nota</span></div>
+            </div>
+            <div id="recent" class="recent"></div>
+            <a href="#historial" class="text-link">Ver historial</a>
+          </section>
+        </div>
+      </section>
+
+      <section id="bancos" class="view" aria-labelledby="banks-heading" hidden>
+        <div class="section-head"><h1 id="banks-heading">Bancos de preguntas</h1><p>Importa un repertorio o edita las preguntas en Excel.</p></div>
+        <div class="card import-card">
+          <label for="import-file">Selecciona un archivo</label>
+          <div class="file-row"><input type="file" id="import-file" accept=".pdf,.xlsx"><button class="button subtle" id="template" type="button">Descargar plantilla Excel</button></div>
+          <p class="field-help">PDF con preguntas numeradas y respuesta correcta indicada, o Excel (.xlsx) con las columnas de la plantilla.</p>
+          <p id="import-status" class="field-help" role="status" hidden></p>
+          <div id="import-preview" hidden>
+            <p id="import-summary"></p>
+            <details id="import-warnings" hidden><summary>Ver avisos de importación</summary><ul id="warning-list"></ul></details>
+            <label for="import-name">Nombre del banco</label><input type="text" id="import-name" maxlength="140">
+            <div class="form-actions"><button class="button primary" id="save-bank" type="button">Guardar banco</button><button class="button subtle" id="cancel-import" type="button">Cancelar</button></div>
+          </div>
+        </div>
+        <div id="bank-list" class="stack"></div>
+      </section>
+
+      <section id="historial" class="view" aria-labelledby="history-heading" hidden>
+        <div class="section-head"><h1 id="history-heading">Historial</h1><p>Consulta tus resultados y guarda una copia de tus datos.</p></div>
+        <div class="history-actions">
+          <button class="button subtle" id="history-xlsx" type="button">Exportar resultados a Excel</button>
+          <button class="button subtle" id="backup" type="button">Descargar copia JSON</button>
+          <button class="button subtle" id="restore" type="button">Restaurar copia</button>
+          <input type="file" id="backup-file" accept=".json" hidden>
+        </div>
+        <div id="history-list" class="stack"></div>
+      </section>
+
+      <section id="test" class="view test-view" aria-labelledby="test-heading" hidden>
+        <div class="test-head"><div><p id="test-bank" class="muted"></p><h1 id="test-heading">Test en curso</h1></div><button class="button subtle" id="pause" type="button">Guardar y salir</button></div>
+        <div class="test-layout">
+          <article class="card question-card">
+            <div class="question-meta"><span id="question-step"></span><span id="question-source"></span></div>
+            <h2 id="question-text" tabindex="-1"></h2>
+            <fieldset id="answer-options" class="answers"><legend class="sr-only">Opciones de respuesta</legend></fieldset>
+            <div class="question-actions"><button class="button subtle" id="previous" type="button">Anterior</button><button type="button" class="button plain" id="clear">Dejar en blanco</button><button class="button primary" id="next" type="button">Siguiente</button></div>
+          </article>
+          <aside class="card tracker" aria-labelledby="tracker-heading"><h2 id="tracker-heading">Preguntas</h2><p id="answered-count" class="muted"></p><div id="question-nav"></div><button class="button subtle" id="finish" type="button">Terminar y corregir</button></aside>
+        </div>
+      </section>
+
+      <section id="resultado" class="view" aria-labelledby="result-heading" hidden>
+        <div class="section-head"><h1 id="result-heading">Resultado del test</h1><p id="result-subtitle"></p></div>
+        <div id="result-summary" class="card result-summary"></div>
+        <div class="review-head"><h2>Corrección</h2><label class="check"><input id="mistakes-only" type="checkbox" checked> Solo fallos y en blanco</label></div>
+        <div id="review-list" class="stack"></div>
+        <div class="form-actions"><a href="#estudiar" class="button primary">Nuevo test</a><a href="#historial" class="button subtle">Volver al historial</a></div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

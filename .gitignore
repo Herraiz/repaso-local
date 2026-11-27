@@ -1,0 +1,7 @@
+*.pdf
+*.xlsx
+repaso-copia-*.json
+*.zip
+*.log
+.DS_Store
+Thumbs.db
