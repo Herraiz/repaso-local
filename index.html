@@ -54,11 +54,13 @@
                   <label><input type="radio" name="mode" value="random" checked><span>Aleatoria</span></label>
                   <label><input type="radio" name="mode" value="selection"><span>Por número</span></label>
                   <label><input type="radio" name="mode" value="review"><span>Fallos</span></label>
+                  <label><input type="radio" name="mode" value="all"><span>Completo</span></label>
                 </div>
               </fieldset>
               <div class="field-row">
                 <div id="count-field"><label for="count">Preguntas</label><input type="number" id="count" min="1" step="1" value="20"></div>
                 <div id="range-field" hidden><label for="range">Números o rangos</label><input type="text" id="range" placeholder="1-15, 23, 40-45"></div>
+                <div id="all-field" hidden><span class="field-label">Preguntas</span><p id="all-count" class="all-count"></p></div>
                 <div><label for="penalty">Penalización por fallo</label><select id="penalty"><option value="0">Sin penalización</option><option value="0.25">−¼ de acierto</option><option value="0.3333333333333333">−⅓ de acierto</option><option value="0.5">−½ de acierto</option><option value="1">−1 acierto</option></select></div>
               </div>
               <div class="topic-field" id="topic-field" hidden><label for="topic">Tema</label><select id="topic"></select></div>
@@ -97,23 +99,45 @@
       </section>
 
       <section id="historial" class="view" aria-labelledby="history-heading" hidden>
-        <div class="section-head"><h1 id="history-heading">Historial</h1><p>Consulta tus resultados y guarda una copia de tus datos.</p></div>
-        <div class="history-actions">
-          <button class="button subtle" id="history-xlsx" type="button">Exportar resultados a Excel</button>
-          <button class="button subtle" id="backup" type="button">Descargar copia JSON</button>
-          <button class="button subtle" id="restore" type="button">Restaurar copia</button>
+        <div class="section-head"><h1 id="history-heading">Historial</h1></div>
+        <div class="history-transfer">
+          <section class="card" aria-labelledby="backup-heading">
+            <h2 id="backup-heading">Copia completa</h2>
+            <p class="muted">Lleva los bancos, el historial y el test en curso a otro dispositivo.</p>
+            <div class="form-actions">
+              <button class="button primary" id="backup" type="button">Exportar copia JSON</button>
+              <button class="button subtle" id="restore" type="button">Importar copia JSON</button>
+            </div>
+          </section>
+          <section class="card" aria-labelledby="history-json-heading">
+            <h2 id="history-json-heading">Resultados</h2>
+            <p class="muted">Importa tests terminados y añádelos a tu historial.</p>
+            <div class="form-actions">
+              <button class="button subtle" id="history-json-export" type="button">Exportar historial JSON</button>
+              <button class="button subtle" id="history-json-import" type="button">Importar historial JSON</button>
+              <button class="button subtle" id="history-xlsx" type="button">Exportar Excel</button>
+            </div>
+          </section>
           <input type="file" id="backup-file" accept=".json" hidden>
+          <input type="file" id="history-file" accept=".json" hidden>
         </div>
         <div id="history-list" class="stack"></div>
       </section>
 
       <section id="test" class="view test-view" aria-labelledby="test-heading" hidden>
-        <div class="test-head"><div><p id="test-bank" class="muted"></p><h1 id="test-heading">Test en curso</h1></div><button class="button subtle" id="pause" type="button">Guardar y salir</button></div>
+        <div class="test-head">
+          <div><p id="test-bank" class="muted"></p><h1 id="test-heading">Test en curso</h1></div>
+          <div class="test-head-actions">
+            <button class="button subtle" id="finish-here" type="button">Terminar examen aquí</button>
+            <button class="button subtle" id="pause" type="button">Guardar y salir</button>
+          </div>
+        </div>
         <div class="test-layout">
           <article class="card question-card">
             <div class="question-meta"><span id="question-step"></span><span id="question-source"></span></div>
             <h2 id="question-text" tabindex="-1"></h2>
-            <fieldset id="answer-options" class="answers"><legend class="sr-only">Opciones de respuesta</legend></fieldset>
+            <fieldset id="answer-options" class="answers" aria-describedby="answer-help"><legend class="sr-only">Opciones de respuesta</legend></fieldset>
+            <p id="answer-help" class="field-help">Pulsa de nuevo la respuesta marcada para avanzar.</p>
             <div class="question-actions"><button class="button subtle" id="previous" type="button">Anterior</button><button type="button" class="button plain" id="clear">Dejar en blanco</button><button class="button primary" id="next" type="button">Siguiente</button></div>
           </article>
           <aside class="card tracker" aria-labelledby="tracker-heading"><h2 id="tracker-heading">Preguntas</h2><p id="answered-count" class="muted"></p><div id="question-nav"></div><button class="button subtle" id="finish" type="button">Terminar y corregir</button></aside>

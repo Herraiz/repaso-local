@@ -5,11 +5,11 @@ Aplicación local para practicar preguntas tipo test de oposiciones y otros exá
 ## Empezar a estudiar
 
 1. Abre **Bancos** e importa tu PDF o Excel. Revisa el recuento y los avisos que aparezcan antes de guardar.
-2. En **Estudiar**, selecciona el banco. Elige **Aleatoria** para sacar una tanda sin repeticiones o **Por número** para escribir una lista o rangos como `1-15, 23, 40-45`. Si el banco tiene temas, puedes acotar la sesión a uno.
-3. Elige la penalización por fallo y empieza el test. Puedes saltar preguntas y usar **Guardar y salir** para continuar después.
-4. Usa **Terminar y corregir** para ver la nota y revisar cada respuesta. El modo **Fallos** recupera las preguntas en las que fallaste o dejaste en blanco la última vez que las hiciste en ese banco.
+2. En **Estudiar**, selecciona el banco. Elige **Completo** para recorrer todas las preguntas en el orden del banco, **Aleatoria** para sacar una tanda sin repeticiones, o **Por número** para escribir una lista o rangos como `1-15, 23, 40-45`. **Fallos** recupera las preguntas que fallaste o dejaste en blanco la última vez que las hiciste. Cuando hay temas disponibles, puedes filtrar en los modos Aleatoria, Por número y Fallos.
+3. Elige la penalización por fallo y empieza el test. Pulsa una vez una opción para marcarla y otra vez la misma opción para avanzar. Puedes saltar preguntas y usar **Guardar y salir** para continuar después.
+4. Usa **Terminar y corregir** para corregir el test entero. Con **Terminar examen aquí** se corrige hasta la pregunta actual o la última que quedó respondida, la que esté más adelante. Por ejemplo, si respondiste la 18 y vuelves a la 12, se corrigen las primeras 18. Las preguntas omitidas dentro de ese tramo cuentan como en blanco. Las posteriores quedan fuera de la nota.
 
-La nota sobre 10 se calcula como `10 × (aciertos − fallos × penalización) ÷ preguntas del test`. Las preguntas en blanco suman cero. La configuración inicial es sin penalización. Una penalización seleccionada puede dar una nota negativa. Ajusta el valor a las bases de tu examen.
+La nota sobre 10 se calcula como `10 × (aciertos − fallos × penalización) ÷ preguntas incluidas en la corrección`. Las preguntas en blanco suman cero. La configuración inicial es sin penalización. Una penalización seleccionada puede dar una nota negativa. Ajusta el valor a las bases de tu examen.
 
 ## Importar un PDF
 
@@ -34,9 +34,14 @@ Mantén las cabeceras y una pregunta por fila. Puedes quitar las columnas de opc
 
 ## Historial y copias
 
-Los bancos, las respuestas y los resultados se guardan en el almacenamiento local del navegador. Usa el mismo navegador, perfil y ruta de `index.html` para seguir estudiando. En **Historial**, **Descargar copia JSON** guarda los bancos, los resultados y el test en curso. **Restaurar copia** sustituye los datos actuales por los del archivo elegido. El Excel de historial contiene una fila de resultados por test.
+Los bancos, las respuestas y los resultados se guardan en el almacenamiento local del navegador. Usa el mismo navegador, perfil y ruta del HTML para seguir estudiando. En **Historial** tienes dos formas de pasar los datos:
 
-Si vas a mover la carpeta, usar otro dispositivo o borrar los datos del navegador, guarda primero la copia JSON. En un perfil privado o si el navegador bloquea su almacenamiento, exporta la copia antes de cerrar.
+- **Exportar copia JSON** guarda los bancos, los resultados y el test en curso. **Importar copia JSON** sustituye los datos actuales por los del archivo elegido, previa confirmación.
+- **Exportar historial JSON** descarga los tests terminados, con sus respuestas y correcciones. **Importar historial JSON** añade los tests que faltan. También acepta la sección de historial de una copia completa.
+
+Para llevar Repaso a una tablet, copia `Repaso.html` y tu copia JSON. Abre el HTML en un navegador que ejecute páginas locales e importa la copia desde **Historial**. `Repaso.html` reúne la aplicación en un archivo. Puedes seguir usando `index.html` con la carpeta completa.
+
+Si vas a mover el HTML, usar otro dispositivo o borrar los datos del navegador, guarda primero la copia JSON. En un perfil privado o si el navegador bloquea su almacenamiento, exporta la copia antes de cerrar. **Exportar Excel** guarda una fila de resultados por test.
 
 ## Código y dependencias
 
@@ -46,5 +51,6 @@ Si vas a mover la carpeta, usar otro dispositivo o borrar los datos del navegado
 - `files.js` lee PDF y Excel y genera las descargas.
 - `data/banco-inicial.js` define el banco que aparece la primera vez que se abre la aplicación.
 - `vendor/` incluye PDF.js 5.6.205 (Apache 2.0) y JSZip 3.10.1 (MIT o GPLv3), junto a sus licencias. PDF.js se carga en el navegador mediante URL de objeto para permitir la apertura directa desde el disco.
+- `node scripts/build-portable.cjs` genera `Repaso.html` desde el código del repositorio. La compilación necesita Node.js. Para usar el HTML en el navegador solo hace falta el archivo generado.
 
-Para verificar un cambio, abre `index.html` y prueba la importación, una sesión por números, una sesión aleatoria, la corrección y la descarga de una copia. Prueba también reimportar el Excel exportado y restaurar la copia en un perfil limpio.
+Para verificar un cambio, abre `index.html` y prueba los modos de estudio. En un examen completo, responde una pregunta más adelante y vuelve atrás antes de pulsar **Terminar examen aquí**. Comprueba que la corrección incluya hasta la última respondida. Importa un historial dos veces para verificar que los tests aparecen una sola vez y restaura una copia completa en un perfil limpio.

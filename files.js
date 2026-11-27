@@ -38,7 +38,7 @@
   async function getPdfLibrary() {
     if (!pdfLibrary) {
       pdfLibrary = (async () => {
-        await loadScript("vendor/pdf.bundle.js");
+        if (!globalThis.RepasoPDF) await loadScript("vendor/pdf.bundle.js");
         const { main, worker } = globalThis.RepasoPDF;
         const mainUrl = URL.createObjectURL(new Blob([main], { type: "text/javascript" }));
         try {

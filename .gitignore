@@ -1,6 +1,8 @@
 *.pdf
 *.xlsx
 repaso-copia-*.json
+repaso-historial-*.json
+/Repaso.html
 *.zip
 *.log
 .DS_Store

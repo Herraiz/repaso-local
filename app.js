@@ -8,7 +8,7 @@
   const gradeText = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
   const dateText = new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short" });
   const routes = { estudiar: "Estudiar", bancos: "Bancos", historial: "Historial", test: "Test en curso", resultado: "Resultado" };
-  const modeName = { random: "Aleatoria", selection: "Por número", review: "Fallos" };
+  const modeName = { random: "Aleatoria", selection: "Por número", review: "Fallos", all: "Completo" };
   let importCandidate;
   let importRun = 0;
   let resultId;
@@ -62,24 +62,38 @@
     if (finished) {
       if (!attempt.date || !Number.isFinite(Date.parse(attempt.date))) throw new Error("Un resultado tiene una fecha no válida.");
       date = new Date(attempt.date).toISOString();
+      if (attempt.originalTotal !== undefined &&
+          (!Number.isInteger(attempt.originalTotal) || attempt.originalTotal < questions.length)) {
+        throw new Error("Un resultado tiene un número de preguntas incorrecto.");
+      }
     }
     return {
       id: clean(attempt.id), bankId: clean(attempt.bankId), bankName: clean(attempt.bankName),
       mode: attempt.mode, penalty: attempt.penalty, questions, answers,
       index: Number.isInteger(attempt.index) ? Math.max(0, Math.min(questions.length - 1, attempt.index)) : 0,
-      ...(finished ? { date } : {})
+      ...(finished ? { date } : {}),
+      ...(finished && attempt.originalTotal > questions.length ? { originalTotal: attempt.originalTotal } : {})
     };
   }
 
+  function validateHistory(input) {
+    if (input?.version !== 1 || !Array.isArray(input.history)) {
+      throw new Error("El archivo no contiene un historial válido de Repaso.");
+    }
+    const history = input.history.map(attempt => checkAttempt(attempt, true));
+    if (new Set(history.map(item => item.id)).size !== history.length) {
+      throw new Error("El archivo contiene tests repetidos.");
+    }
+    return history;
+  }
+
   function validateState(input) {
-    if (input?.version !== 1 || !Array.isArray(input.banks) || !Array.isArray(input.history)) {
+    if (input?.version !== 1 || !Array.isArray(input.banks)) {
       throw new Error("El archivo no es una copia válida de Repaso.");
     }
     const banks = input.banks.map(checkBank);
-    const history = input.history.map(attempt => checkAttempt(attempt, true));
-    for (const items of [banks, history]) {
-      if (new Set(items.map(item => item.id)).size !== items.length) throw new Error("La copia contiene identificadores repetidos.");
-    }
+    const history = validateHistory(input);
+    if (new Set(banks.map(bank => bank.id)).size !== banks.length) throw new Error("La copia contiene bancos repetidos.");
     return {
       version: 1, banks, history,
       selected: banks.some(bank => bank.id === input.selected) ? input.selected : banks[0]?.id ?? null,
@@ -152,24 +166,29 @@
     return bank.questions.filter(item => lastByQuestion.get(item.id));
   }
 
-  function eligibleQuestions() {
+  function eligibleQuestions(mode) {
     const bank = currentBank();
     if (!bank) return [];
-    const source = activeMode() === "review" ? missed(bank) : bank.questions;
+    if (mode === "all") return bank.questions;
+    const source = mode === "review" ? missed(bank) : bank.questions;
     const topic = $("topic").value;
     return topic ? source.filter(item => item.topic === topic) : source;
   }
 
   function updateSettings() {
-    const available = eligibleQuestions().length;
     const mode = activeMode();
-    $("count-field").hidden = mode === "selection";
+    const available = eligibleQuestions(mode).length;
+    const countNeeded = mode === "random" || mode === "review";
+    $("count-field").hidden = !countNeeded;
     $("range-field").hidden = mode !== "selection";
-    $("count").disabled = mode === "selection";
+    $("all-field").hidden = mode !== "all";
+    $("all-count").textContent = available === 1 ? "1 del banco" : available + " del banco";
+    $("topic-field").hidden = mode === "all" || $("topic").options.length < 2;
+    $("count").disabled = !countNeeded;
     $("range").required = mode === "selection";
-    $("count").required = mode !== "selection";
+    $("count").required = countNeeded;
     $("count").max = Math.max(1, available);
-    if (available > 0 && Number($("count").value) > available) $("count").value = available;
+    if (countNeeded && available > 0 && Number($("count").value) > available) $("count").value = available;
     $("start").disabled = !available;
     $("resume").hidden = !state.active;
     labelMessage("setup-error", mode === "review" && !available ? "Aquí aparecerán tus fallos y preguntas en blanco pendientes de repasar." : "");
@@ -184,7 +203,6 @@
     $("bank-select").disabled = !bank;
     $("topic").replaceChildren(new Option("Todos los temas", ""), ...topics.map(topic => new Option(topic, topic)));
     if (topics.includes(previousTopic)) $("topic").value = previousTopic;
-    $("topic-field").hidden = !topics.length;
     $("hero-count").textContent = bank?.questions.length ?? 0;
     $("hero-label").textContent = bank?.questions.length === 1 ? "Pregunta disponible" : "Preguntas disponibles";
     const records = sortedHistory().filter(item => item.bankId === bank?.id);
@@ -238,6 +256,7 @@
     const list = $("history-list");
     list.replaceChildren();
     $("history-xlsx").disabled = !state.history.length;
+    $("history-json-export").disabled = !state.history.length;
     if (!state.history.length) list.append(element("p", "card muted", "Todavía no has terminado ningún test."));
     for (const record of sortedHistory()) {
       const result = score(record.questions, record.answers, record.penalty);
@@ -245,7 +264,8 @@
       const body = element("div", "list-body");
       body.append(element("h2", "", record.bankName),
         element("p", "muted", dateText.format(new Date(record.date)) + " · " + modeName[record.mode] + " · " +
-          result.right + " de " + result.total + " acertadas"));
+          result.right + " de " + result.total + " acertadas" +
+          (record.originalTotal ? " · Terminado en la " + result.total + " de " + record.originalTotal : "")));
       const actions = element("div", "list-actions");
       actions.append(element("strong", "history-grade", gradeText.format(result.grade) + " / 10"),
         button("Ver corrección", "subtle small", () => showResult(record.id)));
@@ -288,6 +308,9 @@
       input.name = "answer";
       input.value = letter;
       input.checked = active.answers[item.id] === letter;
+      input.addEventListener("click", () => {
+        if (active.answers[item.id] === letter) advance();
+      });
       input.addEventListener("change", () => {
         active.answers[item.id] = letter;
         $("clear").disabled = false;
@@ -319,7 +342,8 @@
   function renderResult() {
     const record = state.history.find(item => item.id === resultId);
     const result = score(record.questions, record.answers, record.penalty);
-    $("result-subtitle").textContent = record.bankName + " · " + dateText.format(new Date(record.date));
+    $("result-subtitle").textContent = record.bankName + " · " + dateText.format(new Date(record.date)) +
+      (record.originalTotal ? " · Corregidas " + result.total + " de " + record.originalTotal + " preguntas" : "");
     const summary = $("result-summary");
     summary.replaceChildren();
     for (const [value, label] of [
@@ -424,11 +448,13 @@
     event.preventDefault();
     const bank = currentBank();
     const mode = activeMode();
-    const eligible = eligibleQuestions();
+    const eligible = eligibleQuestions(mode);
     if (!bank || !eligible.length) return;
     try {
       let questions;
-      if (mode === "selection") {
+      if (mode === "all") {
+        questions = eligible;
+      } else if (mode === "selection") {
         questions = selectQuestions(eligible, $("range").value);
       } else {
         const count = Number($("count").value);
@@ -465,23 +491,38 @@
     $("question-text").focus();
   });
 
-  function finish() {
+  function finish(here = false) {
     const active = state.active;
     if (!active) return;
-    const blank = active.questions.length - Object.keys(active.answers).length;
-    if (blank && !confirm("Quedan " + blank + " preguntas en blanco. ¿Quieres corregir ya el test?")) return;
-    state.history.push({ ...active, date: new Date().toISOString() });
+    const total = active.questions.length;
+    const lastAnswered = here ? active.questions.findLastIndex(item => Object.hasOwn(active.answers, item.id)) : total - 1;
+    const limit = Math.max(active.index, lastAnswered) + 1;
+    const questions = active.questions.slice(0, limit);
+    const { blank } = score(questions, active.answers, active.penalty);
+    if (blank) {
+      const scope = limit < total ? "Se corregirán las primeras " + limit + " de " + total + " preguntas. " : "";
+      const summary = blank === 1 ? "Hay 1 pregunta en blanco." : "Hay " + blank + " preguntas en blanco.";
+      if (!confirm(scope + summary + " ¿Quieres corregir ya el test?")) return;
+    }
+    state.history.push({
+      ...active, questions, date: new Date().toISOString(),
+      ...(limit < total ? { originalTotal: total } : {})
+    });
     state.active = null;
     persist();
     showResult(active.id);
   }
 
-  $("next").addEventListener("click", () => {
+  function advance() {
     const active = state.active;
+    if (!active) return;
     if (active.index === active.questions.length - 1) finish();
     else goToQuestion(active.index + 1);
-  });
-  $("finish").addEventListener("click", finish);
+  }
+
+  $("next").addEventListener("click", advance);
+  $("finish").addEventListener("click", () => finish());
+  $("finish-here").addEventListener("click", () => finish(true));
   $("mistakes-only").addEventListener("change", renderResult);
   $("quick-import").addEventListener("click", () => {
     navigate("bancos");
@@ -513,10 +554,17 @@
   $("template").addEventListener("click", () => runExport(() => files.exportBank([{
     id: "1", topic: "Ejemplo", text: "¿Cuántos minutos tiene una hora?", options: ["30", "45", "60", "90"], answer: "C", page: null
   }], "plantilla-repaso.xlsx")));
-  $("backup").addEventListener("click", () => {
-    files.save(new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }),
-      "repaso-copia-" + new Date().toISOString().slice(0, 10) + ".json");
-  });
+  function downloadJson(data, prefix) {
+    const date = new Date().toISOString().slice(0, 10);
+    files.save(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+      "repaso-" + prefix + "-" + date + ".json");
+  }
+
+  $("backup").addEventListener("click", () => downloadJson(state, "copia"));
+  $("history-json-export").addEventListener("click", () => downloadJson({
+    version: 1, history: sortedHistory()
+  }, "historial"));
+
   $("restore").addEventListener("click", () => $("backup-file").click());
   $("backup-file").addEventListener("change", async event => {
     const file = event.target.files[0];
@@ -533,6 +581,27 @@
       renderHistory();
     } catch (error) {
       labelMessage("notice", "No se pudo restaurar la copia. " + error.message, true);
+    }
+  });
+  $("history-json-import").addEventListener("click", () => $("history-file").click());
+  $("history-file").addEventListener("change", async event => {
+    const file = event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const history = validateHistory(JSON.parse(await file.text()));
+      const known = new Set(state.history.map(record => record.id));
+      const added = history.filter(record => !known.has(record.id));
+      if (!added.length) {
+        labelMessage("notice", history.length ? "Estos tests ya están en tu historial." : "El archivo no contiene tests terminados.");
+        return;
+      }
+      state.history = [...state.history, ...added];
+      labelMessage("notice", added.length === 1 ? "Se ha añadido 1 test al historial." : "Se han añadido " + added.length + " tests al historial.");
+      persist();
+      renderHistory();
+    } catch (error) {
+      labelMessage("notice", "No se pudo importar el historial. " + error.message, true);
     }
   });
   $("history-xlsx").addEventListener("click", () => runExport(() => {
