@@ -2,18 +2,22 @@
   "use strict";
 
   const $ = id => document.getElementById(id);
-  const { clean, letters, bankQuestions, selectQuestions, shuffled, score } = Repaso;
+  const { clean, letters, bankQuestions, selectQuestions, shuffled, score, studyDate, reviewSchedule } = Repaso;
   const files = RepasoFiles;
   const storeKey = "repaso-local-v1";
   const gradeText = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
   const dateText = new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short" });
+  const reviewDateText = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   const routes = { estudiar: "Estudiar", bancos: "Bancos", historial: "Historial", test: "Test en curso", resultado: "Resultado" };
-  const modeName = { random: "Aleatoria", selection: "Por número", review: "Fallos", all: "Completo" };
+  const modeName = { random: "Aleatoria", selection: "Por número", review: "Fallos", all: "Completo", spaced: "Repaso de hoy" };
+  const reviewBatchSize = 10;
   let importCandidate;
   let importRun = 0;
   let resultId;
+  let historyToDelete;
   let storageAvailable = true;
   let storageSnapshot = null;
+  let shownStudyDate;
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -66,12 +70,20 @@
           (!Number.isInteger(attempt.originalTotal) || attempt.originalTotal < questions.length)) {
         throw new Error("Un resultado tiene un número de preguntas incorrecto.");
       }
+      if (attempt.studyDate !== undefined) {
+        const day = new Date(attempt.studyDate + "T00:00:00Z");
+        if (typeof attempt.studyDate !== "string" || !Number.isFinite(day.getTime()) ||
+            day.toISOString().slice(0, 10) !== attempt.studyDate) {
+          throw new Error("Un resultado tiene una fecha de repaso no válida.");
+        }
+      }
     }
     return {
       id: clean(attempt.id), bankId: clean(attempt.bankId), bankName: clean(attempt.bankName),
       mode: attempt.mode, penalty: attempt.penalty, questions, answers,
       index: Number.isInteger(attempt.index) ? Math.max(0, Math.min(questions.length - 1, attempt.index)) : 0,
       ...(finished ? { date } : {}),
+      ...(finished && attempt.studyDate ? { studyDate: attempt.studyDate } : {}),
       ...(finished && attempt.originalTotal > questions.length ? { originalTotal: attempt.originalTotal } : {})
     };
   }
@@ -97,7 +109,8 @@
     return {
       version: 1, banks, history,
       selected: banks.some(bank => bank.id === input.selected) ? input.selected : banks[0]?.id ?? null,
-      active: input.active ? checkAttempt(input.active, false) : null
+      active: input.active ? checkAttempt(input.active, false) : null,
+      ...(input.shuffleQuestions === true ? { shuffleQuestions: true } : {})
     };
   }
 
@@ -175,14 +188,42 @@
     return topic ? source.filter(item => item.topic === topic) : source;
   }
 
+  function spacedQuestions(bank, topic, today) {
+    if (!bank) return { questions: [], next: "" };
+    const schedule = reviewSchedule(state.history.filter(record => record.bankId === bank.id));
+    const pending = [];
+    let next = "";
+    for (const item of bank.questions) {
+      if (topic && item.topic !== topic) continue;
+      const review = schedule.get(item.id);
+      if (!review) continue;
+      if (review.due <= today) pending.push({ item, due: review.due });
+      else if (!next || review.due < next) next = review.due;
+    }
+    pending.sort((a, b) => a.due.localeCompare(b.due));
+    return { questions: pending.map(entry => entry.item), next };
+  }
+
   function updateSettings() {
     const mode = activeMode();
-    const available = eligibleQuestions(mode).length;
+    shownStudyDate = studyDate();
+    const queue = spacedQuestions(currentBank(), $("topic").value, shownStudyDate);
+    const available = (mode === "spaced" ? queue.questions : eligibleQuestions(mode)).length;
     const countNeeded = mode === "random" || mode === "review";
     $("count-field").hidden = !countNeeded;
     $("range-field").hidden = mode !== "selection";
-    $("all-field").hidden = mode !== "all";
-    $("all-count").textContent = available === 1 ? "1 del banco" : available + " del banco";
+    $("all-field").hidden = mode !== "all" && !(mode === "spaced" && available);
+    $("all-count").textContent = mode === "spaced"
+      ? Math.min(reviewBatchSize, available) + " en esta tanda"
+      : available + " del banco";
+    $("spaced-label").textContent = "Repaso de hoy · " + queue.questions.length;
+    let spacedStatus = "";
+    if (mode === "spaced") {
+      if (available) spacedStatus = available === 1 ? "1 pregunta pendiente de repaso." : available + " preguntas pendientes de repaso.";
+      else if (queue.next) spacedStatus = "Próximo repaso el " + reviewDateText.format(new Date(queue.next + "T00:00:00Z")) + ".";
+      else spacedStatus = "Aquí aparecerán las preguntas que falles o dejes en blanco.";
+    }
+    labelMessage("spaced-status", spacedStatus);
     $("topic-field").hidden = mode === "all" || $("topic").options.length < 2;
     $("count").disabled = !countNeeded;
     $("range").required = mode === "selection";
@@ -205,6 +246,7 @@
     if (topics.includes(previousTopic)) $("topic").value = previousTopic;
     $("hero-count").textContent = bank?.questions.length ?? 0;
     $("hero-label").textContent = bank?.questions.length === 1 ? "Pregunta disponible" : "Preguntas disponibles";
+    $("shuffle").checked = state.shuffleQuestions === true;
     const records = sortedHistory().filter(item => item.bankId === bank?.id);
     const results = records.map(item => score(item.questions, item.answers, item.penalty));
     const right = results.reduce((sum, item) => sum + item.right, 0);
@@ -257,7 +299,8 @@
     list.replaceChildren();
     $("history-xlsx").disabled = !state.history.length;
     $("history-json-export").disabled = !state.history.length;
-    if (!state.history.length) list.append(element("p", "card muted", "Todavía no has terminado ningún test."));
+    $("clear-history").disabled = !state.history.length;
+    if (!state.history.length) list.append(element("p", "card muted", "No hay tests en el historial."));
     for (const record of sortedHistory()) {
       const result = score(record.questions, record.answers, record.penalty);
       const item = element("article", "card list-card");
@@ -448,18 +491,29 @@
     event.preventDefault();
     const bank = currentBank();
     const mode = activeMode();
-    const eligible = eligibleQuestions(mode);
-    if (!bank || !eligible.length) return;
+    if (!bank) return;
+    const eligible = mode === "spaced"
+      ? spacedQuestions(bank, $("topic").value, studyDate()).questions
+      : eligibleQuestions(mode);
+    if (!eligible.length) {
+      updateSettings();
+      return;
+    }
     try {
       let questions;
       if (mode === "all") {
         questions = eligible;
       } else if (mode === "selection") {
         questions = selectQuestions(eligible, $("range").value);
+      } else if (mode === "spaced") {
+        questions = eligible.slice(0, reviewBatchSize);
       } else {
         const count = Number($("count").value);
         if (!Number.isInteger(count) || count < 1 || count > eligible.length) throw new Error("Elige entre 1 y " + eligible.length + " preguntas.");
         questions = shuffled(eligible).slice(0, count);
+      }
+      if (state.shuffleQuestions && (mode === "all" || mode === "selection" || mode === "spaced")) {
+        questions = shuffled(questions);
       }
       if (state.active && !confirm("Hay un test en curso. ¿Quieres sustituirlo por este test nuevo?")) return;
       state.active = {
@@ -480,6 +534,11 @@
     renderStudy();
   });
   $("topic").addEventListener("change", updateSettings);
+  $("shuffle").addEventListener("change", event => {
+    if (event.target.checked) state.shuffleQuestions = true;
+    else delete state.shuffleQuestions;
+    persist();
+  });
   $("setup").querySelectorAll('input[name="mode"]').forEach(input => input.addEventListener("change", updateSettings));
   $("resume").addEventListener("click", () => navigate("test"));
   $("pause").addEventListener("click", () => navigate("estudiar"));
@@ -504,8 +563,9 @@
       const summary = blank === 1 ? "Hay 1 pregunta en blanco." : "Hay " + blank + " preguntas en blanco.";
       if (!confirm(scope + summary + " ¿Quieres corregir ya el test?")) return;
     }
+    const finished = new Date();
     state.history.push({
-      ...active, questions, date: new Date().toISOString(),
+      ...active, questions, date: finished.toISOString(), studyDate: studyDate(finished),
       ...(limit < total ? { originalTotal: total } : {})
     });
     state.active = null;
@@ -554,16 +614,34 @@
   $("template").addEventListener("click", () => runExport(() => files.exportBank([{
     id: "1", topic: "Ejemplo", text: "¿Cuántos minutos tiene una hora?", options: ["30", "45", "60", "90"], answer: "C", page: null
   }], "plantilla-repaso.xlsx")));
-  function downloadJson(data, prefix) {
+  function jsonFile(data, prefix) {
     const date = new Date().toISOString().slice(0, 10);
-    files.save(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
-      "repaso-" + prefix + "-" + date + ".json");
+    return new File([JSON.stringify(data, null, 2)], "repaso-" + prefix + "-" + date + ".json",
+      { type: "application/json" });
   }
 
-  $("backup").addEventListener("click", () => downloadJson(state, "copia"));
-  $("history-json-export").addEventListener("click", () => downloadJson({
-    version: 1, history: sortedHistory()
-  }, "historial"));
+  $("backup").addEventListener("click", () => runExport(async () => {
+    const file = jsonFile(state, "copia");
+    const payload = { files: [file] };
+    labelMessage("backup-status", "");
+    if (navigator.share && navigator.canShare?.(payload)) {
+      $("backup").disabled = true;
+      try {
+        await navigator.share({ ...payload, title: "Copia de Repaso" });
+        return;
+      } catch (error) {
+        if (error.name === "AbortError") return;
+      } finally {
+        $("backup").disabled = false;
+      }
+    }
+    files.save(file, file.name);
+    labelMessage("backup-status", "Descarga iniciada. Busca " + file.name + " en el navegador.");
+  }));
+  $("history-json-export").addEventListener("click", () => runExport(() => {
+    const file = jsonFile({ version: 1, history: sortedHistory() }, "historial");
+    files.save(file, file.name);
+  }));
 
   $("restore").addEventListener("click", () => $("backup-file").click());
   $("backup-file").addEventListener("change", async event => {
@@ -613,6 +691,38 @@
     rows.unshift(["Fecha local", "Banco", "Sesión", "Preguntas", "Aciertos", "Fallos", "En blanco", "Penalización", "Nota / 10"]);
     return files.writeExcel(rows, "Historial", "repaso-historial.xlsx", [26, 40, 16, 12, 12, 11, 13, 17, 13]);
   }));
+
+  const clearHistoryDialog = $("clear-history-dialog");
+  $("clear-history").addEventListener("click", () => {
+    historyToDelete = state.history;
+    const count = historyToDelete.length;
+    const summary = count === 1
+      ? "Se borrará 1 test del historial, incluida su corrección."
+      : "Se borrarán " + count + " tests del historial, incluidas sus correcciones.";
+    $("clear-history-description").textContent = summary + " El calendario de repaso se reiniciará.";
+    clearHistoryDialog.returnValue = "cancel";
+    clearHistoryDialog.showModal();
+  });
+  clearHistoryDialog.addEventListener("close", () => {
+    const confirmedHistory = historyToDelete;
+    historyToDelete = undefined;
+    if (clearHistoryDialog.returnValue !== "delete") return;
+    if (confirmedHistory !== state.history) {
+      labelMessage("notice", "El historial ha cambiado en otra pestaña. Revisa la lista y vuelve a confirmar.", true);
+      return;
+    }
+    const wasAvailable = storageAvailable;
+    state.history = [];
+    persist();
+    if (wasAvailable && !storageAvailable) {
+      state.history = confirmedHistory;
+      return;
+    }
+    resultId = undefined;
+    renderHistory();
+    $("history-json-heading").focus();
+    labelMessage("notice", storageAvailable ? "Historial borrado." : "Historial borrado de esta sesión.");
+  });
   window.addEventListener("storage", event => {
     if (event.key !== storeKey || !event.newValue || event.newValue === storageSnapshot || !storageAvailable) return;
     try {
@@ -624,6 +734,11 @@
     }
   });
   window.addEventListener("hashchange", view);
+  function refreshReviewDate() {
+    if (!$("estudiar").hidden && shownStudyDate !== studyDate()) updateSettings();
+  }
+  window.addEventListener("focus", refreshReviewDate);
+  document.addEventListener("visibilitychange", refreshReviewDate);
   storageStatus();
   view();
 })();

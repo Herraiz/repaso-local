@@ -173,7 +173,42 @@
     return { right, wrong, blank, total: items.length, grade: (right - wrong * penalty) / items.length * 10 };
   }
 
-  const api = { letters, clean, bankQuestions, pdfQuestions, rowsToQuestions, questionRows, selectQuestions, shuffled, score };
+  function studyDate(date = new Date()) {
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  }
+
+  function addStudyDays(day, days) {
+    const date = new Date(day + "T00:00:00Z");
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  }
+
+  function reviewSchedule(attempts) {
+    const intervals = [3, 7, 14, 30];
+    const schedule = new Map();
+    const chronological = [...attempts].sort((a, b) => a.date.localeCompare(b.date));
+    for (const attempt of chronological) {
+      const day = attempt.studyDate || studyDate(new Date(attempt.date));
+      const tomorrow = addStudyDays(day, 1);
+      for (const item of attempt.questions) {
+        const previous = schedule.get(item.id);
+        if (attempt.answers[item.id] !== item.answer) {
+          schedule.set(item.id, { due: tomorrow, step: 0 });
+        } else if (previous && previous.due <= day) {
+          schedule.set(item.id, {
+            due: addStudyDays(day, intervals[previous.step]),
+            step: Math.min(previous.step + 1, intervals.length - 1)
+          });
+        }
+      }
+    }
+    return schedule;
+  }
+
+  const api = {
+    letters, clean, bankQuestions, pdfQuestions, rowsToQuestions, questionRows, selectQuestions, shuffled, score,
+    studyDate, reviewSchedule
+  };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Repaso = api;
 })(globalThis);

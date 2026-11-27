@@ -55,8 +55,19 @@
                   <label><input type="radio" name="mode" value="selection"><span>Por número</span></label>
                   <label><input type="radio" name="mode" value="review"><span>Fallos</span></label>
                   <label><input type="radio" name="mode" value="all"><span>Completo</span></label>
+                  <label><input type="radio" name="mode" value="spaced" aria-describedby="spaced-status"><span id="spaced-label">Repaso de hoy</span></label>
                 </div>
               </fieldset>
+              <details class="mode-help">
+                <summary>¿Qué hace cada modo?</summary>
+                <dl>
+                  <dt>Aleatoria</dt><dd>Saca una tanda al azar, sin repetir preguntas.</dd>
+                  <dt>Por número</dt><dd>Elige preguntas o rangos, como 1-15, 23.</dd>
+                  <dt>Fallos</dt><dd>Practica las que fallaste o dejaste en blanco la última vez.</dd>
+                  <dt>Completo</dt><dd>Recorre todas las preguntas del banco.</dd>
+                  <dt>Repaso de hoy</dt><dd>Practica hasta 10 preguntas cuyo repaso ya toca, dando prioridad a las más atrasadas. Si fallas una pregunta o la dejas en blanco, se programa para el día siguiente. Los aciertos van espaciando el repaso a 3, 7, 14 y 30 días.</dd>
+                </dl>
+              </details>
               <div class="field-row">
                 <div id="count-field"><label for="count">Preguntas</label><input type="number" id="count" min="1" step="1" value="20"></div>
                 <div id="range-field" hidden><label for="range">Números o rangos</label><input type="text" id="range" placeholder="1-15, 23, 40-45"></div>
@@ -64,6 +75,11 @@
                 <div><label for="penalty">Penalización por fallo</label><select id="penalty"><option value="0">Sin penalización</option><option value="0.25">−¼ de acierto</option><option value="0.3333333333333333">−⅓ de acierto</option><option value="0.5">−½ de acierto</option><option value="1">−1 acierto</option></select></div>
               </div>
               <div class="topic-field" id="topic-field" hidden><label for="topic">Tema</label><select id="topic"></select></div>
+              <p id="spaced-status" class="field-help spaced-status" role="status" hidden></p>
+              <div class="study-option">
+                <label class="check"><input id="shuffle" type="checkbox" aria-describedby="shuffle-help"> Mezclar el orden de las preguntas</label>
+                <p id="shuffle-help" class="field-help">Aleatoria y Fallos siempre mezclan las preguntas.</p>
+              </div>
               <p id="setup-error" class="error" role="alert" hidden></p>
               <div class="form-actions"><button class="button primary" id="start" type="submit">Empezar test</button><button class="button subtle" id="resume" type="button" hidden>Continuar test</button></div>
             </form>
@@ -103,19 +119,21 @@
         <div class="history-transfer">
           <section class="card" aria-labelledby="backup-heading">
             <h2 id="backup-heading">Copia completa</h2>
-            <p class="muted">Lleva los bancos, el historial y el test en curso a otro dispositivo.</p>
+            <p class="muted">Guarda los bancos, el historial y el test en curso antes de cambiar de dispositivo o actualizar el HTML.</p>
             <div class="form-actions">
-              <button class="button primary" id="backup" type="button">Exportar copia JSON</button>
-              <button class="button subtle" id="restore" type="button">Importar copia JSON</button>
+              <button class="button primary" id="backup" type="button">Guardar o compartir copia</button>
+              <button class="button subtle" id="restore" type="button">Recuperar copia</button>
             </div>
+            <p id="backup-status" class="field-help" role="status" hidden></p>
           </section>
           <section class="card" aria-labelledby="history-json-heading">
-            <h2 id="history-json-heading">Resultados</h2>
+            <h2 id="history-json-heading" tabindex="-1">Resultados</h2>
             <p class="muted">Importa tests terminados y añádelos a tu historial.</p>
             <div class="form-actions">
               <button class="button subtle" id="history-json-export" type="button">Exportar historial JSON</button>
               <button class="button subtle" id="history-json-import" type="button">Importar historial JSON</button>
               <button class="button subtle" id="history-xlsx" type="button">Exportar Excel</button>
+              <button class="button warning" id="clear-history" type="button">Borrar historial</button>
             </div>
           </section>
           <input type="file" id="backup-file" accept=".json" hidden>
@@ -153,5 +171,15 @@
       </section>
     </main>
   </div>
+  <dialog id="clear-history-dialog" aria-labelledby="clear-history-heading" aria-describedby="clear-history-description">
+    <form method="dialog">
+      <h2 id="clear-history-heading">¿Borrar el historial?</h2>
+      <p id="clear-history-description"></p>
+      <div class="form-actions dialog-actions">
+        <button class="button subtle" value="cancel" autofocus>Cancelar</button>
+        <button class="button danger" value="delete">Borrar historial</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>
