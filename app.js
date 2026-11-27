@@ -17,6 +17,7 @@
   let historyToDelete;
   let storageAvailable = true;
   let storageSnapshot = null;
+  let bankUpgradePending = false;
   let shownStudyDate;
 
   function element(tag, className, text) {
@@ -120,10 +121,31 @@
     return { version: 1, banks, history: [], selected: banks[0]?.id ?? null, active: null };
   }
 
+  function replaceDemoBank(saved) {
+    const initial = globalThis.RepasoInitialBank;
+    const demoIndex = saved.banks.findIndex(bank => bank.id === "demo-general");
+    if (!initial || initial.id === "demo-general" || demoIndex === -1) return saved;
+
+    const replacement = checkBank(initial);
+    const questions = JSON.stringify(replacement.questions);
+    const existing = saved.banks.find(bank => bank.id === replacement.id) ??
+      saved.banks.find(bank => bank.questions.length === replacement.questions.length &&
+        JSON.stringify(bank.questions) === questions);
+    const banks = [...saved.banks];
+    if (existing) banks.splice(demoIndex, 1);
+    else banks[demoIndex] = replacement;
+    const selected = saved.selected === "demo-general" ? (existing ?? replacement).id : saved.selected;
+    return { ...saved, banks, selected };
+  }
+
   function openState() {
     try {
       storageSnapshot = localStorage.getItem(storeKey);
-      return storageSnapshot ? validateState(JSON.parse(storageSnapshot)) : initialState();
+      if (!storageSnapshot) return initialState();
+      const previous = validateState(JSON.parse(storageSnapshot));
+      const current = replaceDemoBank(previous);
+      bankUpgradePending = previous !== current;
+      return current;
     } catch (error) {
       storageAvailable = false;
       labelMessage("notice", "No se pudieron abrir los datos guardados. Puedes estudiar y descargar una copia JSON durante esta sesión.", true);
@@ -649,7 +671,7 @@
     event.target.value = "";
     if (!file) return;
     try {
-      const restored = validateState(JSON.parse(await file.text()));
+      const restored = replaceDemoBank(validateState(JSON.parse(await file.text())));
       if (!confirm("¿Sustituir los bancos, el historial y el test en curso por los de esta copia?")) return;
       state = restored;
       storageAvailable = true;
@@ -726,7 +748,7 @@
   window.addEventListener("storage", event => {
     if (event.key !== storeKey || !event.newValue || event.newValue === storageSnapshot || !storageAvailable) return;
     try {
-      state = validateState(JSON.parse(event.newValue));
+      state = replaceDemoBank(validateState(JSON.parse(event.newValue)));
       storageSnapshot = event.newValue;
       view();
     } catch {
@@ -740,5 +762,6 @@
   window.addEventListener("focus", refreshReviewDate);
   document.addEventListener("visibilitychange", refreshReviewDate);
   storageStatus();
+  if (bankUpgradePending) persist();
   view();
 })();

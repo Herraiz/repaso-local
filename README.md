@@ -2,6 +2,8 @@
 
 Aplicación local para practicar preguntas tipo test de oposiciones y otros exámenes. Abre `index.html` en el navegador. Mantén los archivos juntos y, si descargaste un ZIP, extrae primero toda la carpeta. Puedes usarla sin conexión y sin instalar un servidor.
 
+El banco inicial contiene las 300 preguntas y sus claves del repertorio definitivo de Auxiliar Administrativo del Servicio Canario de la Salud. Al actualizar desde la versión de ejemplo, Repaso conserva los bancos importados, el historial y el test en curso.
+
 ## GitHub Pages y Safari
 
 Para publicar en GitHub Pages, selecciona **Settings → Pages → Deploy from a branch** y guarda **main** con la carpeta **/ (root)**. El archivo `.nojekyll` permite servir la aplicación estática directamente. El código usa rutas relativas y también funciona en un sitio de proyecto bajo `/<repositorio>/`. [Configurar la fuente de GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
